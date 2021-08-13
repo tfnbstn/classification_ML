@@ -1,0 +1,262 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+PACKAGES->
+-install.packages("e1071")
+-install.packages("rpart")
+-install.packages("rpart.plot")
+-install.packages("neuralnet")
+-install.packages("randomForest")
+-install.packages("pROC")
+
+
+```{r}
+library(readxl)
+#.....data preparation.....
+data <- read_xlsx("C:/Users/tfn/Documents/diabetes_data_upload.xlsx") #data asaigned to "data" variable
+#redefining the data type process...
+data$Gender <- as.factor(data$Gender)                              
+data$Polyuria <- as.factor(data$Polyuria)                          
+data$Polydipsia <- as.factor(data$Polydipsia)               
+data$`sudden weight loss` <- as.factor(data$`sudden weight loss`)
+data$weakness <- as.factor(data$weakness)
+data$Polyphagia <- as.factor(data$Polyphagia)
+data$`Genital thrush` <- as.factor(data$`Genital thrush`)
+data$`visual blurring` <- as.factor(data$`visual blurring`)
+data$Itching <- as.factor(data$Itching)
+data$Irritability <- as.factor(data$Irritability)
+data$`delayed healing` <- as.factor(data$`delayed healing`)
+data$`partial paresis` <- as.factor(data$`partial paresis`)
+data$`muscle stiffness` <- as.factor(data$`muscle stiffness`)
+data$Alopecia <- as.factor(data$Alopecia)
+data$Obesity <- as.factor(data$Obesity)
+data$class <- as.factor(data$class)                                
+#end of the process
+#missing value check
+anyNA(data)
+#data summary/descriptive statistics
+summary(data)                                                                 
+str(data)
+head(data)
+```
+```{r}
+plot(data$class)
+```
+
+Function for performance Calculation
+```{r}
+performance <- function(cm){
+  TN <- cm[1,1]
+  TP <- cm[2,2]
+  FN <- cm[1,2]
+  FP <- cm[2,1]
+
+  accuracy = sum(diag(cm))/sum(cm)
+  errorrate = 1-accuracy
+  sensitivity = TP /(TP + FN)
+  specificity = TN / (TN + FP)
+  return(data.frame(TP,FN,TN,FP,accuracy,errorrate,sensitivity,specificity))
+}
+```
+
+
+DATA SPLITTING
+
+```{r}
+#...Data Splitting...
+set.seed(2380) #for reproducibility
+data_split <- sample(nrow(data), nrow(data) * 0.7) #Spliting data into two parts
+train <- data[data_split,]
+test <- data[-data_split,]
+nrow(train);nrow(test)
+summary(train$class);summary(test$class)
+```
+
+LOGISTIC REGRESSION App.
+
+```{r}
+#...Training Log. Reg. Model...
+model_LRM <-  glm(class~. ,data = train, family = "binomial")
+```
+
+```{r}
+#...Performance of the Model...
+#For Train
+predicted_probs_train <- predict(model_LRM,type = "response")
+predicted_class_train <- ifelse(predicted_probs_train > 0.5, "Positive", "Negative")
+print(c("Train",mean(predicted_class_train == train$class)))
+#For Test
+predicted_probs_test <- predict(model_LRM, test, type = "response")
+predicted_class_test <- ifelse(predicted_probs_test > 0.5, "Positive", "Negative")
+print(c("Test",mean(predicted_class_test == test$class)))
+#Confusion Matrix
+cm_LR <- table(predicted=predicted_class_test,actual=test$class)
+performace_LR <- performance(cm_LR)
+cm_LR
+```
+
+
+
+
+
+NAIVE BAYES App.
+```{r}
+library(e1071)
+#...Training Naive Bayes Model...
+model_NB <- naiveBayes(x=train[-17], y=train$class)
+```
+
+```{r}
+#...Performance of the Model...
+#For Train
+y_pred_TRAIN = predict(model_NB, newdata = train[-17])
+print(c("Train",mean(y_pred_TRAIN == train$class)))
+#For Test
+y_pred_TEST = predict(model_NB, newdata = test[-17])
+print(c("Test",mean(y_pred_TEST == test$class)))
+#Confusion Matrix
+cm_NB <- table(predicted=y_pred_TEST,actual=test$class)
+performance_NB <- performance(cm_NB)
+cm_NB
+```
+
+
+
+
+
+
+DECISION TREE
+```{r}
+#...Training Decision Tree Model...
+library(rpart)
+library(rpart.plot)
+model_DT <- rpart(class ~., method = "class", data = train)
+rpart.plot(model_DT)
+```
+```{r}
+#...Performance of the Model...
+#FOR TRAIN
+pred_labels_dt_train <- predict(model_DT, train, type = "class")
+conf_mat_dt_train <- table(pred_labels_dt_train, train$class)
+print(c("Train:",sum(diag(conf_mat_dt_train))/sum(conf_mat_dt_train)))
+#FOR TEST
+pred_labels_dt_test <- predict(model_DT, test, type = "class")
+cm_DT <- table(pred_labels_dt_test, test$class)
+print(c("Test:",sum(diag(cm_DT))/sum(cm_DT)))
+#Confusion Matrix
+performance_DT <- performance(cm_DT)
+cm_DT
+```
+
+
+K-NEAREST NEIGHBORS
+
+```{r}
+library(class)
+#...Training K-Nearest Neighbors Model...
+trainKNN <- data.matrix(train)
+trainKNN <- data.frame(trainKNN)
+testKNN <- data.matrix(test)
+testKNN <- data.frame(testKNN)
+model_KNN <- knn(train=trainKNN, test=testKNN, cl=trainKNN[,17], k=5)
+```
+
+```{r}
+#...Performance of the Model...
+#Confusion Matrix
+cm_KNN <- table(testKNN[,17],model_KNN)
+performance_KNN <- performance(cm_KNN) 
+print(c("Test", sum(diag(cm_KNN)/sum(cm_KNN))))
+cm_KNN
+```
+
+
+
+SUPPORT VECTOR MACHINES App.
+```{r}
+library(e1071)
+#...Training Supp. Vec. Mach. Model...
+model_SVM <- svm(formula=class~., data=train, type="C-classification", kernel = "linear")
+```
+
+```{r}
+#...Performance of the Model...
+#For Train
+pred_svm_TRAIN = predict(model_SVM, newdata = train[-17])
+print(c("Train",mean(pred_svm_TRAIN == train$class)))
+#For Test
+pred_svm_TEST = predict(model_SVM, newdata = test[-17])
+print(c("Test",mean(pred_svm_TEST == test$class)))
+#Confusion Matrix
+cm_SVM <- table(predicted=pred_svm_TEST,actual=test$class)
+performace_SVM <- performance(cm_SVM)
+cm_SVM
+```
+
+
+
+
+RANDOM FOREST
+
+
+```{r}
+library(randomForest)
+#...Training Random Forest Model...
+model_RF <- randomForest(x = train[-17],
+                          y = train$class,
+                          ntree = 10)
+```
+
+```{r}
+#...Performance of the Model..
+#For Train
+pred_train_RF <- predict(model_RF, train[,-17])
+print(c("Train",mean(pred_train_RF == train$class)))
+#For Test
+pred_test_RF <- predict(model_RF, newdata = test[-17])
+print(c("Test",mean(pred_test_RF == test$class)))
+#Confusion Matrix
+cm_RF <- table(predicted=pred_test_RF,actual=test$class)
+performance_RF <- performance(cm_RF)
+cm_RF
+```
+```{r}
+comp <- data.frame(
+           "TP" = c(performace_LR$TP,performace_SVM$TP,
+                          performance_DT$TP,performance_KNN$TP,
+                          performance_NB$TP,performance_RF$TP),
+           "FN" = c(performace_LR$FN,performace_SVM$FN,
+                          performance_DT$FN,performance_KNN$FN,
+                          performance_NB$FN,performance_RF$FN),
+           "TN" = c(performace_LR$TN,performace_SVM$TN,
+                          performance_DT$TN,performance_KNN$TN,
+                          performance_NB$TN,performance_RF$TN),
+           "FP" = c(performace_LR$FP,performace_SVM$FP,
+                          performance_DT$FP,performance_KNN$FP,
+                          performance_NB$FP,performance_RF$FP),
+           "Accuracy" = c(performace_LR$accuracy,performace_SVM$accuracy,
+                          performance_DT$accuracy,performance_KNN$accuracy,
+                          performance_NB$accuracy,performance_RF$accuracy),
+           "Error Rate" = c(performace_LR$errorrate,performace_SVM$errorrate,
+                          performance_DT$errorrate,performance_KNN$errorrate,
+                          performance_NB$errorrate,performance_RF$errorrate),
+           "Sensitivity"=c(performace_LR$sensitivity,performace_SVM$sensitivity,
+                          performance_DT$sensitivity,performance_KNN$sensitivity,
+                          performance_NB$sensitivity,performance_RF$sensitivity),
+           "Specificity"=c(performace_LR$specificity,performace_SVM$specificity,
+                          performance_DT$specificity,performance_KNN$specificity,
+                          performance_NB$specificity,performance_RF$specificity),
+           row.names = c("Logistic Regression", "Support V. Mach.", "Decision Trees",
+                         "K-Nearest Neighbors", "Naive Bayes", "Random Forest"))
+comp[order(comp$Accuracy,decreasing = T),]
+```
+
+
+
+
+
+
